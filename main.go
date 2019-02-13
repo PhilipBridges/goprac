@@ -1,18 +1,18 @@
 package main
 
 import (
-	"encoding/json"
-	"io/ioutil"
-	"jwt/types"
+	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
-	"time"
 
-	jwt "github.com/dgrijalva/jwt-go"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/cors"
 
 	auth "jwt/auth"
+	"jwt/database"
+	posts "jwt/posts"
 )
 
 const (
@@ -22,64 +22,30 @@ const (
 	SECRET = "secret"
 )
 
+var db *sql.DB
+
 // Just check auth at start of handlers
 
 func main() {
+	var err error
+
+	database.DBConn, err = sql.Open("mysql", "root:secret@tcp(localhost:3307)/godb")
+	defer db.Close()
+
+	if err != nil {
+		fmt.Println("WOW PANIC")
+		panic(err.Error()) // Just for example purpose. You should use proper error handling instead of panic
+	}
+
 	router := httprouter.New()
-	router.POST("/login", login)
-	router.POST("/account", auth.GetUser)
+	router.POST("/login", auth.Login)
+	router.POST("/register", auth.Register)
+	router.GET("/account", auth.GetUser)
+	// TODO
+	router.POST("/posts", posts.CreatePost)
 
 	handler := cors.Default().Handler(router)
 
 	log.Println("Listening for connections on port: ", PORT)
 	log.Fatal(http.ListenAndServe(":"+PORT, handler))
-}
-
-func login(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, "Login failed!", http.StatusUnauthorized)
-		return
-	}
-
-	var userData map[string]string
-	json.Unmarshal(body, &userData)
-
-	// Demo - in real case scenario you'd check this against your database
-	if userData["email"] == "admin@gmail.com" && userData["password"] == "admin123" {
-		claims := types.JWTData{
-			StandardClaims: jwt.StandardClaims{
-				ExpiresAt: time.Now().Add(time.Hour).Unix(),
-			},
-
-			CustomClaims: map[string]string{
-				"userid": "u1",
-			},
-		}
-
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		tokenString, err := token.SignedString([]byte(SECRET))
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Login failed!", http.StatusUnauthorized)
-			return
-		}
-
-		tStruct := struct {
-			Token string `json:"token"`
-		}{
-			tokenString,
-		}
-
-		auth.JsonResponse(tStruct, w)
-
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Login failed!", http.StatusUnauthorized)
-		}
-
-	} else {
-		http.Error(w, "Login failed!", http.StatusUnauthorized)
-	}
 }
