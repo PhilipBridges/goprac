@@ -29,7 +29,7 @@ var db *sql.DB
 func main() {
 	var err error
 
-	database.DBConn, err = sql.Open("mysql", "root:secret@tcp(localhost:3307)/godb")
+	database.DBConn, err = sql.Open("mysql", "<username>:<password>@<db-address>")
 	defer db.Close()
 
 	if err != nil {
